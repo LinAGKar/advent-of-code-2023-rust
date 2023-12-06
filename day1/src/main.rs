@@ -26,6 +26,14 @@ fn part_2(input: &str) -> usize {
 fn main() {
     let mut input = String::new();
     std::io::stdin().read_to_string(&mut input).unwrap();
-    println!("Part 1: {}", part_1(&input));
-    println!("Part 2: {}", part_2(&input));
+
+    let start_time = std::time::Instant::now();
+    let result = part_1(&input);
+    println!("Part 1 time: {:?}", std::time::Instant::now() - start_time);
+    println!("Part 1 result: {}", result);
+
+    let start_time = std::time::Instant::now();
+    let result = part_2(&input);
+    println!("Part 2 time: {:?}", std::time::Instant::now() - start_time);
+    println!("Part 2 result: {}", result);
 }
