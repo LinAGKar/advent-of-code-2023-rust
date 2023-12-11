@@ -30,21 +30,24 @@ fn sum_distances(positions: &[u8], expansion_factor: u64) -> u64 {
 
 fn solve(input: &str, expansion_factor: u64) -> u64 {
     // We're looking for the manhattan distance, and there are no obstacles, so the shortest distance is just the sum of
-    // the distances on x and y axis, so we can sum up x and y separately.
-    let (mut x, y): (Vec<_>, Vec<_>) = input.lines().enumerate().flat_map(|(y, line)| {
-        line.chars().enumerate().filter_map(move |(x, c)| {
+    // the distances on x and y axis, so we can sum up x and y separately. x and y positions need to be in order.
+    let mut galaxies_by_column = vec![0; input.lines().count()];
+    let mut ys = Vec::new();
+
+    for (y, line) in input.lines().enumerate() {
+        for (x, c) in line.chars().enumerate() {
             if c == '#' {
-                Some((x as u8, y as u8))
-            } else {
-                None
+                galaxies_by_column[x] += 1;
+                ys.push(y as u8);
             }
-        })
-    }).unzip();
+        }
+    }
 
-    // sum_distances depends on positions being in order. y already is.
-    x.sort();
+    let xs: Vec<_> = galaxies_by_column.into_iter().enumerate().flat_map(|(x, count)| {
+        (0..count).map(move |_| x as u8)
+    }).collect();
 
-    sum_distances(&x, expansion_factor) + sum_distances(&y, expansion_factor)
+    sum_distances(&xs, expansion_factor) + sum_distances(&ys, expansion_factor)
 }
 
 fn part_1(input: &str) -> u64 {
