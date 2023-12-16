@@ -37,8 +37,7 @@ fn get_tile<'a>(map: &'a [[Point; 2]], pos: Point, width: isize) -> Option<&'a [
     }
 }
 
-
-fn find_loop<F: FnMut(&[[Point; 2]], Point, isize)>(input: &str, mut pipe_callback: F) {
+fn find_loop<F: FnMut(&[[Point; 2]], Point, Point, isize)>(input: &str, mut pipe_callback: F) {
     let width = input.lines().next().unwrap().chars().count() as isize;
 
     // Build up a map of the area as a flat vector, which each tile containing the offsets to the tiles it's connected
@@ -80,11 +79,10 @@ fn find_loop<F: FnMut(&[[Point; 2]], Point, isize)>(input: &str, mut pipe_callba
     }
 
     // Pick one arbitrary direction from start, and walk through the whole loop, calling a callback for each step
-    // Initial value for came_from does not matter
-    let mut came_from = start;
+    let mut came_from = start + get_tile(&map, start, width).unwrap()[0];
     let mut pos = start;
     loop {
-        pipe_callback(&map, pos, width);
+        pipe_callback(&map, came_from, pos, width);
 
         // Check both points current tile connects to, and take the one we didn't just come from
         let new_pos = get_tile(&map, pos, width).unwrap().iter().find_map(|&diff| {
@@ -108,7 +106,7 @@ fn find_loop<F: FnMut(&[[Point; 2]], Point, isize)>(input: &str, mut pipe_callba
 fn part_1(input: &str) -> u16 {
     // Count how many steps we take to get through the loop
     let mut steps = 0;
-    find_loop(input, |_map, _pos, _width| {
+    find_loop(input, |_map, _came_from, _pos, _width| {
         steps += 1;
     });
 
@@ -117,79 +115,59 @@ fn part_1(input: &str) -> u16 {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-enum Tile {
-    Unknown,
-    Pipe,
-    Outside,
+enum Tile2 {
+    Pipe(i8),
+    Floor,
 }
 
 fn part_2(input: &str) -> usize {
-    // Map with some padding around each tile, so we can squeeze between tiles
     let mut tile_map = Vec::new();
-    let mut tile_map_width = 0;
-    let mut tile_map_height = 0;
-    let mut map_size = 0;
+    let mut map_width = 0;
+    let mut map_height = 0;
 
-    // Count how many tiles loop takes up
-    let mut pipe_count = 0;
-
-    find_loop(input, |map, pos, width| {
-        pipe_count += 1;
-
+    find_loop(input, |map, came_from, pos, width| {
         if tile_map.len() == 0 {
-            let height = map.len() / width as usize;
-            tile_map = vec![Tile::Unknown; (height * 2 + 1) * (width as usize * 2 + 1)];
-            tile_map_width = width * 2 + 1;
-            tile_map_height = (tile_map.len() / tile_map_width as usize) as isize;
-            map_size = map.len();
+            tile_map = vec![Tile2::Floor; map.len()];
+            map_width = width as usize;
+            map_height = tile_map.len() / map_width;
         }
 
-        let tile_pos = pos.x as usize * 2 + 1 + tile_map_width as usize * (pos.y as usize * 2 + 1);
-        tile_map[tile_pos] = Tile::Pipe;
-
-        // Connect to pipes below and to right (pipes above and to left will connect to us)
-        let pipe = get_tile(map, pos, width).unwrap();
-        if pipe.contains(&Point { x: 0, y: 1}) {
-            tile_map[tile_pos + tile_map_width as usize] = Tile::Pipe;
+        if tile_map[pos.y as usize * width as usize + pos.x as usize] == Tile2::Floor {
+            tile_map[pos.y as usize * width as usize + pos.x as usize] = Tile2::Pipe(0);
         }
-        if pipe.contains(&Point { x: 1, y: 0}) {
-            tile_map[tile_pos + 1] = Tile::Pipe;
+        if tile_map[came_from.y as usize * width as usize + came_from.x as usize] == Tile2::Floor {
+            tile_map[came_from.y as usize * width as usize + came_from.x as usize] = Tile2::Pipe(0);
+        }
+        if pos.y > came_from.y {
+            if let Tile2::Pipe(mov) = &mut tile_map[pos.y as usize * width as usize + pos.x as usize] {
+                *mov += 1;
+            }
+            if let Tile2::Pipe(mov) = &mut tile_map[came_from.y as usize * width as usize + came_from.x as usize] {
+                *mov += 1;
+            }
+        } else if pos.y < came_from.y {
+            if let Tile2::Pipe(mov) = &mut tile_map[pos.y as usize * width as usize + pos.x as usize] {
+                *mov -= 1;
+            }
+            if let Tile2::Pipe(mov) = &mut tile_map[came_from.y as usize * width as usize + came_from.x as usize] {
+                *mov -= 1;
+            }
         }
     });
 
-    // Start from some point guaranteed to be outside loop, and cover the whole thing, in arbitrary order, to see how
-    // much is outside
-    let mut frontier = vec![Point { x: 0, y: 0 }];
-    let mut outside_count = 0;
-    while let Some(pos) = frontier.pop() {
-        for diff in [
-            Point { x: -1, y: 0 },
-            Point { x: 1, y: 0 },
-            Point { x: 0, y: -1 },
-            Point { x: 0, y: 1 },
-        ] {
-            let new_pos = pos + diff;
-            if new_pos.x < 0 || new_pos.y < 0 || new_pos.x >= tile_map_width || new_pos.y >= tile_map_height {
-                continue;
+    // for y in
+    (0..map_height).map(|y| {
+        let tile_map = &tile_map;
+        (0..map_width).fold((0, 0), move |(mov_state, count), x| {
+            // The pipe has two sides, one on the inside and one of the outside. So when we cross the pipe, we go from
+            // the inside to the outside or vice versa.
+            match (tile_map[y * map_width + x], mov_state) {
+                (Tile2::Floor, 0) => (mov_state, count),
+                (Tile2::Floor, _) => (mov_state, count + 1),
+                (Tile2::Pipe(mov), _) => (mov_state + mov, count),
             }
-
-            let tile = &mut tile_map[new_pos.x as usize + new_pos.y as usize * tile_map_width as usize];
-
-            // Check that this isn't a pipe, and that we haven't visited this already
-            if *tile != Tile::Unknown {
-                continue;
-            }
-
-            *tile = Tile::Outside;
-            frontier.push(new_pos);
-            // If this is not a padding tile, increment
-            if new_pos.x % 2 == 1 && new_pos.y % 2 == 1 {
-                outside_count += 1;
-            }
-        }
-    }
-
-    map_size - outside_count - pipe_count
+        }).1
+    }).sum()
 }
 
 fn main() {
