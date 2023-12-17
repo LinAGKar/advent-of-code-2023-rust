@@ -26,16 +26,13 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
     const START: (usize, usize) = (0, 0);
     let goal = (map[0].len() - 1, map.len() - 1);
 
-    let h = |(x, y)| ((goal.0 - x) + (goal.1 - y)) as u16;
-
-    let initial_f_score = h(START);
     let mut frontier = BinaryHeap::new();
-    frontier.push((Reverse(initial_f_score), 0, Direction::None, START));
+    frontier.push((Reverse(0), Direction::None, START));
 
     // Getting to start is free
     map[START.1][START.0].g_scores = [0; 2];
 
-    while let Some((_, g_score, direction, pos)) = frontier.pop() {
+    while let Some((Reverse(g_score), direction, pos)) = frontier.pop() {
         let (x, y) = pos;
 
         if g_score != map[y][x].g_scores[(direction as usize >> 1) & 0b1] {
@@ -75,9 +72,8 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
 
                     if tentative_g_score < old_g_score {
                         // Found a better way to this position, in this direction
-                        let f_score = tentative_g_score + h(pos);
                         neighbor.g_scores[new_direction as usize / 2] = tentative_g_score;
-                        frontier.push((Reverse(f_score), tentative_g_score, new_direction, (new_x, new_y)))
+                        frontier.push((Reverse(tentative_g_score), new_direction, (new_x, new_y)))
                     }
                 }
             }
