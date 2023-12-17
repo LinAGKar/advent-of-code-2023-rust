@@ -10,15 +10,15 @@ enum Direction {
 
 struct Tile<const MAX_STEPS: usize> {
     heat_loss: u8,
-    // Need to keep track of scores separately for each number of steps in each direction
-    g_scores: [[u16; MAX_STEPS]; 4],
+    // Need to keep track of scores separately for each number of steps in each orientation
+    g_scores: [[u16; MAX_STEPS]; 2],
 }
 
 fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16 {
     let mut map: Vec<Vec<_>> = input.lines().map(|line| {
         line.chars().map(|c| Tile {
             heat_loss: c.to_digit(10).unwrap() as u8,
-            g_scores: [[u16::MAX; MAX_STEPS]; 4],
+            g_scores: [[u16::MAX; MAX_STEPS]; 2],
         }).collect()
     }).collect();
 
@@ -32,7 +32,7 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
     frontier.push((Reverse(initial_f_score), 0, Direction::Down, 0, START));
 
     // Getting to start is free
-    map[START.1][START.0].g_scores = [[0; MAX_STEPS]; 4];
+    map[START.1][START.0].g_scores = [[0; MAX_STEPS]; 2];
 
     while let Some((_, g_score, direction, steps, pos)) = frontier.pop() {
         let (x, y) = pos;
@@ -43,7 +43,7 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
             steps - 1
         };
 
-        if g_score != map[y][x].g_scores[direction as usize][step_index] {
+        if g_score != map[y][x].g_scores[direction as usize / 2][step_index] {
             // We've found a better way to this tile, skip it
             continue;
         }
@@ -84,7 +84,7 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
 
             let neighbor = &mut map[new_y][new_x];
             let tentative_g_score = g_score + neighbor.heat_loss as u16;
-            let old_g_score = neighbor.g_scores[new_direction as usize][new_steps - 1];
+            let old_g_score = neighbor.g_scores[new_direction as usize / 2][new_steps - 1];
 
             if tentative_g_score < old_g_score {
                 // Found a better way to this position, for this number of steps in this direction
@@ -93,7 +93,7 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
                 // No point in visiting this tile again with the same g_score and a higher number of steps in the
                 // same direction.
                 for i in new_steps - 1..MAX_STEPS {
-                    let neighbor_g_score = &mut neighbor.g_scores[new_direction as usize][i];
+                    let neighbor_g_score = &mut neighbor.g_scores[new_direction as usize / 2][i];
                     if tentative_g_score < *neighbor_g_score {
                         *neighbor_g_score = tentative_g_score;
                     }
