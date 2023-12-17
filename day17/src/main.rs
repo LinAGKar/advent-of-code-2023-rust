@@ -1,4 +1,4 @@
-use std::{io::Read, collections::BinaryHeap, cmp::Reverse};
+use std::io::Read;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 enum Direction {
@@ -15,6 +15,50 @@ struct Tile {
     g_scores: [u16; 2],
 }
 
+struct BucketQueue<T> {
+    items: Vec<Vec<T>>,
+    first_filled: usize,
+}
+
+impl<T> BucketQueue<T> {
+    fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            first_filled: usize::MAX,
+        }
+    }
+
+    fn push(&mut self, priority: usize, item: T) {
+        if priority >= self.items.len() {
+            self.items.resize_with(priority + 1, || Vec::new());
+        }
+
+        self.items[priority].push(item);
+        if priority < self.first_filled {
+            self.first_filled = priority;
+        }
+    }
+
+    fn pop_front(&mut self) -> Option<(usize, T)> {
+        if self.first_filled >= self.items.len() {
+            None
+        } else {
+            let item = self.items[self.first_filled].pop();
+            let priority = self.first_filled;
+            if self.items[self.first_filled].is_empty() {
+                self.first_filled = self.items.iter().enumerate().skip(self.first_filled + 1).find_map(|(n, bucket)| {
+                    if bucket.is_empty() {
+                        None
+                    } else {
+                        Some(n)
+                    }
+                }).unwrap_or(usize::MAX)
+            }
+            item.map(|x| (priority, x))
+        }
+    }
+}
+
 fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16 {
     let mut map: Vec<Vec<_>> = input.lines().map(|line| {
         line.chars().map(|c| Tile {
@@ -26,13 +70,14 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
     const START: (u8, u8) = (0, 0);
     let goal = (map[0].len() - 1, map.len() - 1);
 
-    let mut frontier = BinaryHeap::new();
-    frontier.push((Reverse(0), Direction::None, START));
+    let mut frontier = BucketQueue::new();
+    frontier.push(0, (Direction::None, START));
 
     // Getting to start is free
     map[START.1 as usize][START.0 as usize].g_scores = [0; 2];
 
-    while let Some((Reverse(g_score), direction, (x, y))) = frontier.pop() {
+    while let Some((g_score, (direction, (x, y)))) = frontier.pop_front() {
+        let g_score = g_score as u16;
         let (x, y) = (x as usize, y as usize);
 
         if g_score != map[y][x].g_scores[(direction as usize >> 1) & 0b1] {
@@ -73,7 +118,7 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
                     if tentative_g_score < old_g_score {
                         // Found a better way to this position, in this direction
                         neighbor.g_scores[new_direction as usize / 2] = tentative_g_score;
-                        frontier.push((Reverse(tentative_g_score), new_direction, (new_x as u8, new_y as u8)))
+                        frontier.push(tentative_g_score as usize, (new_direction, (new_x as u8, new_y as u8)))
                     }
                 }
             }
