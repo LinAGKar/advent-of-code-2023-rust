@@ -23,24 +23,24 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
         }).collect()
     }).collect();
 
-    const START: (usize, usize) = (0, 0);
+    const START: (u8, u8) = (0, 0);
     let goal = (map[0].len() - 1, map.len() - 1);
 
     let mut frontier = BinaryHeap::new();
     frontier.push((Reverse(0), Direction::None, START));
 
     // Getting to start is free
-    map[START.1][START.0].g_scores = [0; 2];
+    map[START.1 as usize][START.0 as usize].g_scores = [0; 2];
 
-    while let Some((Reverse(g_score), direction, pos)) = frontier.pop() {
-        let (x, y) = pos;
+    while let Some((Reverse(g_score), direction, (x, y))) = frontier.pop() {
+        let (x, y) = (x as usize, y as usize);
 
         if g_score != map[y][x].g_scores[(direction as usize >> 1) & 0b1] {
             // We've found a better way to this tile, skip it
             continue;
         }
 
-        if pos == goal {
+        if (x, y) == goal {
             return g_score;
         }
 
@@ -73,7 +73,7 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
                     if tentative_g_score < old_g_score {
                         // Found a better way to this position, in this direction
                         neighbor.g_scores[new_direction as usize / 2] = tentative_g_score;
-                        frontier.push((Reverse(tentative_g_score), new_direction, (new_x, new_y)))
+                        frontier.push((Reverse(tentative_g_score), new_direction, (new_x as u8, new_y as u8)))
                     }
                 }
             }
