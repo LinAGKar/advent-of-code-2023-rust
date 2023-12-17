@@ -6,19 +6,20 @@ enum Direction {
     Down = 1,
     Right = 2,
     Left = 3,
+    None = 4,
 }
 
-struct Tile<const MAX_STEPS: usize> {
+struct Tile {
     heat_loss: u8,
-    // Need to keep track of scores separately for each number of steps in each orientation
-    g_scores: [[u16; MAX_STEPS]; 2],
+    // Need to keep track of scores separately in each orientation
+    g_scores: [u16; 2],
 }
 
 fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16 {
     let mut map: Vec<Vec<_>> = input.lines().map(|line| {
         line.chars().map(|c| Tile {
             heat_loss: c.to_digit(10).unwrap() as u8,
-            g_scores: [[u16::MAX; MAX_STEPS]; 2],
+            g_scores: [u16::MAX; 2],
         }).collect()
     }).collect();
 
@@ -29,82 +30,56 @@ fn best_path<const MIN_STEPS: usize, const MAX_STEPS: usize>(input: &str) -> u16
 
     let initial_f_score = h(START);
     let mut frontier = BinaryHeap::new();
-    frontier.push((Reverse(initial_f_score), 0, Direction::Down, 0, START));
+    frontier.push((Reverse(initial_f_score), 0, Direction::None, START));
 
     // Getting to start is free
-    map[START.1][START.0].g_scores = [[0; MAX_STEPS]; 2];
+    map[START.1][START.0].g_scores = [0; 2];
 
-    while let Some((_, g_score, direction, steps, pos)) = frontier.pop() {
+    while let Some((_, g_score, direction, pos)) = frontier.pop() {
         let (x, y) = pos;
-        let step_index = if steps == 0 {
-            // Special case for starting position. After this, steps will always be at least 1
-            0
-        } else {
-            steps - 1
-        };
 
-        if g_score != map[y][x].g_scores[direction as usize / 2][step_index] {
+        if g_score != map[y][x].g_scores[(direction as usize >> 1) & 0b1] {
             // We've found a better way to this tile, skip it
             continue;
         }
 
-        if pos == goal && steps >= MIN_STEPS {
+        if pos == goal {
             return g_score;
         }
 
-        for (new_x, new_y, new_direction) in [
-            (x + 1, y, Direction::Right),
-            (x, y + 1, Direction::Down),
-            (x.wrapping_sub(1), y, Direction::Left),
-            (x, y.wrapping_sub(1), Direction::Up),
-        ] {
-            if new_x >= map[0].len() || new_y >= map.len() {
-                // We went outside map
-                continue;
-            }
+        for new_direction in match direction {
+            Direction::Up | Direction::Down => [Direction::Right, Direction::Left],
+            Direction::Right | Direction::Left => [Direction::Up, Direction::Down],
+            Direction::None => [Direction::Down, Direction::Right], // Special case for starting tile
+        } {
+            let mut tentative_g_score = g_score;
+            for steps in 1..=MAX_STEPS {
+                let (new_x, new_y) = match new_direction {
+                    Direction::Up => (x, y.wrapping_sub(steps)),
+                    Direction::Down => (x, y + steps),
+                    Direction::Right => (x + steps, y),
+                    Direction::Left => (x.wrapping_sub(steps), y),
+                    Direction::None => panic!(),
+                };
 
-            let new_steps = if new_direction == direction {
-                // Continuing in the same direction
-                steps + 1
-            } else if (new_direction <= Direction::Down) == (direction <= Direction::Down) {
-                // 180 degree turn
-                continue;
-            } else if steps > 0 && steps < MIN_STEPS {
-                // We haven't gone far enough to turn yet
-                continue;
-            } else {
-                // 90 degree turn
-                1
-            };
+                if new_x >= map[0].len() || new_y >= map.len() {
+                    // We went outside map
+                    continue;
+                }
 
-            if new_steps > MAX_STEPS {
-                // Gone too far in one direction
-                continue;
-            }
+                let neighbor = &mut map[new_y][new_x];
+                tentative_g_score += neighbor.heat_loss as u16;
 
-            let neighbor = &mut map[new_y][new_x];
-            let tentative_g_score = g_score + neighbor.heat_loss as u16;
-            let old_g_score = neighbor.g_scores[new_direction as usize / 2][new_steps - 1];
+                if steps >= MIN_STEPS {
+                    let old_g_score = neighbor.g_scores[new_direction as usize / 2];
 
-            if tentative_g_score < old_g_score {
-                // Found a better way to this position, for this number of steps in this direction
-                let f_score = tentative_g_score + h(pos);
-
-                // No point in visiting this tile again with the same g_score and a higher number of steps in the
-                // same direction.
-                for i in new_steps - 1..MAX_STEPS {
-                    let neighbor_g_score = &mut neighbor.g_scores[new_direction as usize / 2][i];
-                    if tentative_g_score < *neighbor_g_score {
-                        *neighbor_g_score = tentative_g_score;
-                    }
-
-                    // Optimization above doesn't work if we have a minimum number of steps we need to go before
-                    // turning/stopping.
-                    if MIN_STEPS > 1 {
-                        break;
+                    if tentative_g_score < old_g_score {
+                        // Found a better way to this position, in this direction
+                        let f_score = tentative_g_score + h(pos);
+                        neighbor.g_scores[new_direction as usize / 2] = tentative_g_score;
+                        frontier.push((Reverse(f_score), tentative_g_score, new_direction, (new_x, new_y)))
                     }
                 }
-                frontier.push((Reverse(f_score), tentative_g_score, new_direction, new_steps, (new_x, new_y)))
             }
         }
     }
