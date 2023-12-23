@@ -42,15 +42,15 @@ fn direction_bit(direction: Direction) -> u8 {
     1 << direction as u8
 }
 
-fn longest_path(graph: &Vec<Node>, current_node: u8, goal: u8, visited: &mut Vec<u8>) -> Option<u16> {
+fn longest_path(graph: &Vec<Node>, current_node: u8, nearest_goal: u8, goal: u8, visited: &mut Vec<u8>) -> Option<u16> {
     graph[current_node as usize].edges.iter().filter_map(|&(next_node, length)| {
         if next_node == goal {
             Some(length)
-        } else if visited.contains(&next_node) {
+        } else if current_node == nearest_goal && next_node != goal || visited.contains(&next_node) {
             None
         } else {
             visited.push(next_node);
-            let result = longest_path(graph, next_node, goal, visited);
+            let result = longest_path(graph, next_node, nearest_goal, goal, visited);
             visited.pop();
             result.map(|x| x + length)
         }
@@ -84,6 +84,7 @@ fn find_longest_path(input: &str, slippery: bool) -> u16 {
     let mut directions_exited = vec![0; 2];
     let mut open_set = vec![(0u8, start, Direction::Down)];
     let mut next_steps = Vec::new();
+    let mut nearest_goal = 0;
 
     while let Some((start_node, start_pos, start_direction)) = open_set.pop() {
         if directions_exited[start_node as usize] & direction_bit(start_direction) != 0 {
@@ -106,6 +107,9 @@ fn find_longest_path(input: &str, slippery: bool) -> u16 {
             }
 
             if let Some(end_node) = node_map[index] {
+                if end_node == 1 {
+                    nearest_goal = start_node;
+                }
                 directions_exited[start_node as usize] |= direction_bit(start_direction);
                 directions_exited[end_node as usize] |= direction_bit(invert_direction(direction));
                 if forward_possible {
@@ -163,7 +167,7 @@ fn find_longest_path(input: &str, slippery: bool) -> u16 {
         }
     }
 
-    longest_path(&graph, 0, 1, &mut Vec::new()).unwrap()
+    longest_path(&graph, 0, nearest_goal, 1, &mut Vec::new()).unwrap()
 }
 
 fn part_1(input: &str) -> u16 {
